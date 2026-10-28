@@ -1,0 +1,31 @@
+
+<html>
+<head>
+    <title>Login</title>
+</head>
+<body>
+
+    <!--login form-->
+    <h2>Login</h2>
+
+    <!--send the form data to the login endpoint-->
+    <form action="http://localhost:3001/login" method="POST">
+
+        <!--enter username-->
+        <label for="username">Username</label><br>
+        <input type="text" name="username" id="username" size="20" required/><br>
+
+        <!--enter password-->
+        <label for="password">Password</label><br>
+        <input type="password" name="password" id="password" size="50" required/><br>
+
+        <!--submit the form-->
+        <input type="submit" value="Login"/>
+
+    </form>
+
+    <!--link to the registration page-->
+    <p>Don't have an account? <a href="register.html">Register here</a></p>
+
+</body>
+</html>
