@@ -1,34 +1,55 @@
-<html>
+<!doctype html>
+<html lang="en">
 <head>
-    <title>Register</title>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Register | Animal Shelter</title>
+  <link rel="stylesheet" href="/account.css" />
+  <script src="/account.js" defer></script>
 </head>
 <body>
-
-    <!--registration form-->
-    <h2>Register</h2>
-
-    <!--send the form data to the register endpoint-->
-    <form action="http://localhost:3001/register" method="POST">
-
-        <!--enter username-->
-        <label for="username">Username</label><br>
-        <input type="text" name="username" id="username" size="20" required/><br>
-
-        <!--enter email-->
-        <label for="email">Email</label><br>
-        <input type="email" name="email" id="email" size="40" required/><br>
-
-        <!--enter password-->
-        <label for="password">Password</label><br>
-        <input type="password" name="password" id="password" size="30" required/><br>
-
-        <!--submit the form-->
-        <input type="submit" value="Register"/>
-
-    </form>
-
-    <!--link to the login page-->
-    <p>Already registered? <a href="login.html">Login here</a></p>
-
+  <a class="skip-link" href="#main-content">Skip to content</a>
+  <header class="site-header">
+    <div class="header-inner page-width">
+      <a class="brand" href="/" aria-label="Animal Shelter home">
+        <span class="brand-mark" aria-hidden="true">AS</span>
+        <span>Animal Shelter<small>Placeholder shelter name</small></span>
+      </a>
+      <nav class="main-nav" aria-label="Main navigation">
+        <a href="/">Home</a>
+        <a href="/#find-an-animal">Find an Animal</a>
+      </nav>
+      <nav class="account-links" aria-label="Account">
+        <a href="/login.html">Login</a>
+        <a class="nav-register" href="/register.html" aria-current="page">Register</a>
+      </nav>
+    </div>
+  </header>
+  <main id="main-content" class="account-main page-width">
+    <section class="account-card" aria-labelledby="account-heading">
+      <p class="eyebrow">Join our community</p>
+      <h1 id="account-heading">Create an account</h1>
+      <p class="intro">Enter your details to register with the shelter.</p>
+      <!--send the form to the existing backend route-->
+      <p id="form-error" role="alert"></p>
+      <form action="http://localhost:3001/register" method="POST">
+        <label for="username">Username</label>
+        <input type="text" name="username" id="username" autocomplete="username" required />
+        <label for="email">Email</label>
+        <input type="email" name="email" id="email" autocomplete="email" required />
+        <label for="password">Password</label>
+        <input type="password" name="password" id="password" autocomplete="new-password" required />
+        <button type="submit">Register</button>
+      </form>
+      <p class="switch-page">Already registered? <a href="/login.html">Login here</a></p>
+    </section>
+  </main>
+  <footer><div class="page-width"><p>Animal Shelter</p><small>Placeholder shelter name</small></div></footer>
+  <dialog id="success-dialog" class="success-dialog" aria-labelledby="success-title" aria-describedby="success-message">
+    <p class="eyebrow">Animal Shelter</p>
+    <h2 id="success-title">You're registered!</h2>
+    <p id="success-message"></p>
+    <button type="button" autofocus>OK, go home</button>
+  </dialog>
 </body>
 </html>

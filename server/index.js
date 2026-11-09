@@ -7,6 +7,10 @@ import express from "express";
 //import cors
 import cors from "cors";
 
+//store login sessions on the server
+import session from "express-session";
+import { fileURLToPath } from "url";
+
 //import the database connection
 import db from "./db.js";
 
@@ -18,11 +22,95 @@ app.use(express.urlencoded({ extended: true }));
 
 //allow react to communicate with the backend
 app.use(cors({
-  origin: "http://localhost:5173"
+  origin: "http://localhost:5173",
+  credentials: true
 }));
 
 //allow the server to read json data
 app.use(express.json());
+
+//use a browser-session cookie and keep passwords out of the session
+app.use(session({
+  name: "shelter.sid",
+  secret: process.env.SESSION_SECRET || crypto.randomBytes(32).toString("hex"),
+  resave: false,
+  saveUninitialized: false,
+  cookie: { httpOnly: true, sameSite: "lax", secure: process.env.NODE_ENV === "production" }
+}));
+
+//share the account page theme with the backend profile page
+app.get("/account.css", (req, res) => {
+  res.sendFile(fileURLToPath(new URL("../public/account.css", import.meta.url)));
+});
+
+//escape account text before including it in html
+function escapeHtml(value) {
+  return String(value).replace(/[&<>"']/g, (character) => ({
+    "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"
+  }[character]));
+}
+
+//let the homepage display the current session's username
+app.get("/api/session", (req, res) => {
+  res.set("Cache-Control", "no-store");
+  res.json({ user: req.session.user || null });
+});
+
+//only logged-in users can open their profile
+app.get("/profile", (req, res) => {
+  res.set("Cache-Control", "no-store");
+  if (!req.session.user) return res.redirect("http://localhost:5173/login.html");
+  const username = escapeHtml(req.session.user.username);
+  res.send(`<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Your profile | Animal Shelter</title>
+  <link rel="stylesheet" href="/account.css" />
+</head>
+<body>
+  <a class="skip-link" href="#main-content">Skip to content</a>
+  <header class="site-header">
+    <div class="header-inner page-width">
+      <a class="brand" href="http://localhost:5173/">
+        <span class="brand-mark" aria-hidden="true">AS</span>
+        <span>Animal Shelter<small>Placeholder shelter name</small></span>
+      </a>
+      <nav class="main-nav" aria-label="Main navigation">
+        <a href="http://localhost:5173/">Home</a>
+        <a href="http://localhost:5173/#find-an-animal">Find an Animal</a>
+      </nav>
+      <nav class="account-links" aria-label="Account">
+        <a href="/profile" aria-current="page">My profile</a>
+        <a href="/logout">Logout</a>
+      </nav>
+    </div>
+  </header>
+  <main id="main-content" class="account-main page-width">
+    <section class="account-card" aria-labelledby="profile-heading">
+      <p class="eyebrow">Your account</p>
+      <h1 id="profile-heading">Welcome, ${username}!</h1>
+      <p>You are logged in as <strong>${username}</strong>.</p>
+      <p><a href="http://localhost:5173/#find-an-animal">Find an animal</a></p>
+      <p><a href="/logout">Logout</a></p>
+    </section>
+  </main>
+</body>
+</html>`);
+});
+
+//destroy the server session and remove its browser cookie
+app.get("/logout", (req, res) => {
+  res.set("Cache-Control", "no-store");
+  req.session.destroy((error) => {
+    if (error) return res.status(500).send("Logout failed. Please try again.");
+    res.clearCookie("shelter.sid", {
+      path: "/", httpOnly: true, sameSite: "lax", secure: process.env.NODE_ENV === "production"
+    });
+    res.redirect("http://localhost:5173/login.html");
+  });
+});
 
 //create the home route
 app.get("/", (req, res) => {
@@ -33,8 +121,8 @@ app.get("/", (req, res) => {
 //create a route to get all animals
 app.get("/api/animals", async (req, res) => {
   try {
-    //get all animals from mysql
-    const [rows] = await db.query("SELECT * FROM animals");
+    //return only public fields so future staff notes stay private
+    const [rows] = await db.query("SELECT id, name, species, age, breed_type FROM animals");
 
     //send the animals to react
     res.json(rows);
@@ -47,6 +135,25 @@ app.get("/api/animals", async (req, res) => {
   }
 });
 
+//get one animal using a parameterized query
+app.get("/api/animals/:id", async (req, res) => {
+  if (!/^[1-9]\d*$/.test(req.params.id) || !Number.isSafeInteger(Number(req.params.id))) {
+    return res.status(400).json({ error: "Invalid animal ID" });
+  }
+
+  try {
+    const [rows] = await db.query(
+      "SELECT id, name, species, age, breed_type, description, ideal_home, care_needs FROM animals WHERE id = ?",
+      [req.params.id]
+    );
+    if (rows.length === 0) return res.status(404).json({ error: "Animal not found" });
+    res.json(rows[0]);
+  } catch (error) {
+    console.error("Animal profile request failed:", error.code);
+    res.status(500).json({ error: "Could not load animal profile" });
+  }
+});
+
  //handle user registration
 app.post("/register", async (req, res) => {
 
@@ -55,7 +162,7 @@ app.post("/register", async (req, res) => {
 
   //check that all fields are provided
   if (!username || !email || !password) {
-    return res.status(400).send("All fields are required");
+    return res.status(400).json({ error: "All fields are required" });
   }
 
   try {
@@ -67,9 +174,7 @@ app.post("/register", async (req, res) => {
 
     //stop registration if the account already exists
     if (existingUsers.length > 0) {
-      return res.status(409).send(
-        'Username or email already exists. <a href="http://localhost:5173/register.html">Try again</a>'
-      );
+      return res.status(409).json({ error: "Username or email already exists." });
     }
 
     //generate a random salt for the password
@@ -90,17 +195,15 @@ app.post("/register", async (req, res) => {
       [username, email, hashedPassword, salt]
     );
 
-    //send a success message and login link
-    res.send(
-      'You have successfully registered. <a href="http://localhost:5173/login.html">Login here</a>'
-    );
+    //let the registration form show a popup and return home
+    res.status(201).json({ message: "You have successfully registered! You can now log in." });
 
   } catch (error) {
     //display the error in the terminal
     console.error(error);
 
     //send an error message
-    res.status(500).send("Registration failed");
+    res.status(500).json({ error: "Registration failed" });
   }
 });
 
@@ -112,9 +215,7 @@ app.post("/login", async (req, res) => {
 
   //check that both fields were provided
   if (!username || !password) {
-    return res.status(401).send(
-      'The login credentials were incorrect. <a href="http://localhost:5173/login.html">Try again</a>'
-    );
+    return res.status(401).json({ error: "The login credentials were incorrect." });
   }
 
   try {
@@ -126,9 +227,7 @@ app.post("/login", async (req, res) => {
 
     //check if the username exists
     if (users.length === 0) {
-      return res.status(401).send(
-        'The login credentials were incorrect. <a href="http://localhost:5173/login.html">Try again</a>'
-      );
+      return res.status(401).json({ error: "The login credentials were incorrect." });
     }
 
     //get the saved password hash and salt
@@ -137,9 +236,7 @@ app.post("/login", async (req, res) => {
 
     //check if the user has a valid saved salt
     if (!salt) {
-      return res.status(401).send(
-        'The login credentials were incorrect. <a href="http://localhost:5173/login.html">Try again</a>'
-      );
+      return res.status(401).json({ error: "The login credentials were incorrect." });
     }
 
     //hash the entered password using the saved salt
@@ -161,20 +258,27 @@ app.post("/login", async (req, res) => {
 
     //check if the password is incorrect
     if (!passwordMatches) {
-      return res.status(401).send(
-        'The login credentials were incorrect. <a href="http://localhost:5173/login.html">Try again</a>'
-      );
+      return res.status(401).json({ error: "The login credentials were incorrect." });
     }
 
-    //send the successful login message
-    res.send("You have logged in successfully");
+    //replace any previous session after checking the password
+    req.session.regenerate((error) => {
+      if (error) return res.status(500).json({ error: "Login failed. Please try again." });
+
+      //save only the user's id and username
+      req.session.user = { id: users[0].id, username: users[0].username };
+      req.session.save((error) => {
+        if (error) return res.status(500).json({ error: "Login failed. Please try again." });
+        res.json({ message: `Welcome, ${users[0].username}!`, user: req.session.user });
+      });
+    });
 
   } catch (error) {
     //display the error in the terminal
     console.error(error);
 
     //send an error response
-    res.status(500).send("Login failed");
+    res.status(500).json({ error: "Login failed" });
   }
 });
 

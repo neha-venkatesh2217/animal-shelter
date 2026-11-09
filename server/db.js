@@ -2,7 +2,9 @@
 import mysql from "mysql2/promise";
 
 //load the environment variables
-import "dotenv/config";
+import dotenv from "dotenv";
+
+dotenv.config({ path: new URL("../.env", import.meta.url), quiet: true });
 
 //create a connection pool for the database
 const db = mysql.createPool({
